@@ -992,6 +992,80 @@ server.tool(
   }
 );
 
+// Get Team Components Tool
+server.tool(
+  "get_team_components",
+  "Get all available components from published team libraries. Returns all components from all enabled team libraries in the current file.",
+  {
+    filterByLibraryName: z.string().optional().describe("Optional library name to filter components from a specific library")
+  },
+  async ({ filterByLibraryName }: any) => {
+    try {
+      const result = await sendCommandToFigma("get_team_components", {
+        filterByLibraryName
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error getting team components: ${error instanceof Error ? error.message : String(error)
+              }`,
+          },
+        ],
+      };
+    }
+  }
+);
+
+// Create All Team Components Tool
+server.tool(
+  "create_all_team_components",
+  "Create instances of all components from team libraries. Optionally filter by library name.",
+  {
+    startX: z.number().optional().describe("Starting X position for the first component (default: 0)"),
+    startY: z.number().optional().describe("Starting Y position for the first component (default: 0)"),
+    spacing: z.number().optional().describe("Spacing between components in grid layout (default: 100)"),
+    filterByLibraryName: z.string().optional().describe("Optional library name to filter components")
+  },
+  async ({ startX, startY, spacing, filterByLibraryName }: any) => {
+    try {
+      const result = await sendCommandToFigma("create_all_team_components", {
+        startX,
+        startY,
+        spacing,
+        filterByLibraryName
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error creating team components: ${error instanceof Error ? error.message : String(error)
+              }`,
+          },
+        ],
+      };
+    }
+  }
+);
+
 // Get Annotations Tool
 server.tool(
   "get_annotations",
@@ -2625,6 +2699,8 @@ type FigmaCommand =
   | "delete_multiple_nodes"
   | "get_styles"
   | "get_local_components"
+  | "get_team_components"
+  | "create_all_team_components"
   | "create_component_instance"
   | "get_instance_overrides"
   | "set_instance_overrides"
@@ -2718,6 +2794,12 @@ type CommandParams = {
   get_styles: Record<string, never>;
   get_local_components: Record<string, never>;
   get_team_components: Record<string, never>;
+  create_all_team_components: {
+    startX?: number;
+    startY?: number;
+    spacing?: number;
+    filterByLibraryName?: string;
+  };
   create_component_instance: {
     componentKey: string;
     x: number;

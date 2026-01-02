@@ -143,8 +143,10 @@ async function handleCommand(command, params) {
       return await getStyles();
     case "get_local_components":
       return await getLocalComponents();
-    // case "get_team_components":
-    //   return await getTeamComponents();
+    case "get_team_components":
+      return await getTeamComponents(params);
+    case "create_all_team_components":
+      return await createAllTeamComponents(params);
     case "create_component_instance":
       return await createComponentInstance(params);
     case "export_node_as_image":
@@ -1144,24 +1146,121 @@ async function getLocalComponents() {
   };
 }
 
-// async function getTeamComponents() {
-//   try {
-//     const teamComponents =
-//       await figma.teamLibrary.getAvailableComponentsAsync();
+async function getTeamComponents(params) {
+  try {
+    const { filterByLibraryName, includeRemote } = params || {};
+  
+    // Get all available components from team libraries
+    const teamComponents =
+      await figma.teamLibrary.getAvailableComponentsAsync();
 
-//     return {
-//       count: teamComponents.length,
-//       components: teamComponents.map((component) => ({
-//         key: component.key,
-//         name: component.name,
-//         description: component.description,
-//         libraryName: component.libraryName,
-//       })),
-//     };
-//   } catch (error) {
-//     throw new Error(`Error getting team components: ${error.message}`);
-//   }
-// }
+    // Filter by library name if provided
+    let filteredComponents = teamComponents;
+    if (filterByLibraryName) {
+      filteredComponents = teamComponents.filter(
+        (comp) => comp.libraryName === filterByLibraryName
+      );
+    }
+
+    // Group components by library name for better organization
+    const componentsByLibrary = {};
+    filteredComponents.forEach((component) => {
+      const libName = component.libraryName || "Unknown Library";
+      if (!componentsByLibrary[libName]) {
+        componentsByLibrary[libName] = [];
+      }
+      componentsByLibrary[libName].push({
+        key: component.key,
+        name: component.name,
+        description: component.description || "",
+        libraryName: component.libraryName,
+      });
+    });
+
+    return {
+      count: filteredComponents.length,
+      totalLibraries: Object.keys(componentsByLibrary).length,
+      components: filteredComponents.map((component) => ({
+        key: component.key,
+        name: component.name,
+        description: component.description || "",
+        libraryName: component.libraryName,
+      })),
+      componentsByLibrary: componentsByLibrary,
+    };
+  } catch (error) {
+    throw new Error(`Error getting team components: ${error.message}`);
+  }
+}
+
+async function createAllTeamComponents(params) {
+  const { startX = 0, startY = 0, spacing = 100, filterByLibraryName } = params || {};
+  
+  try {
+    const teamComponents = await figma.teamLibrary.getAvailableComponentsAsync();
+    
+    // Filter by library name if provided
+    let componentsToCreate = teamComponents;
+    if (filterByLibraryName) {
+      componentsToCreate = teamComponents.filter(
+        (comp) => comp.libraryName === filterByLibraryName
+      );
+    }
+    
+    const instances = [];
+    let currentX = startX;
+    let currentY = startY;
+    const itemsPerRow = 3; // Arrange in grid
+    let row = 0;
+    let col = 0;
+    
+    for (const component of componentsToCreate) {
+      try {
+        const importedComponent = await figma.importComponentByKeyAsync(component.key);
+        const instance = importedComponent.createInstance();
+        
+        instance.x = currentX;
+        instance.y = currentY;
+        
+        figma.currentPage.appendChild(instance);
+        
+        instances.push({
+          id: instance.id,
+          name: instance.name,
+          key: component.key,
+          x: instance.x,
+          y: instance.y,
+          width: instance.width,
+          height: instance.height,
+          componentId: instance.componentId,
+        });
+        
+        // Calculate next position (grid layout)
+        col++;
+        if (col >= itemsPerRow) {
+          col = 0;
+          row++;
+          currentX = startX;
+          currentY = startY + (row * spacing);
+        } else {
+          currentX += instance.width + spacing;
+        }
+      } catch (error) {
+        console.error(`Error creating instance for ${component.name}: ${error.message}`);
+        // Continue with next component
+      }
+    }
+    
+    return {
+      success: true,
+      totalComponents: componentsToCreate.length,
+      instancesCreated: instances.length,
+      instances: instances,
+    };
+  } catch (error) {
+    throw new Error(`Error creating team components: ${error.message}`);
+  }
+}
 
 async function createComponentInstance(params) {
   const { componentKey, x = 0, y = 0 } = params || {};
